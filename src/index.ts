@@ -48,8 +48,7 @@ class StreamStructure {
         if (!data) throw new TypeError(`expected a 'object' as parameter but got '${null}'`);
         if (typeof data !== "object" && typeof data !== "function") throw new TypeError(`expected a 'object' as parameter but got '${null}'`);
 
-        // Lista de Buffers
-        let buffers: Buffer[] = [];
+        let outBuffers: Buffer[] = [];
 
         /**
          * Pega uma valor com um tipo e envia para o buffer 
@@ -60,7 +59,7 @@ class StreamStructure {
          */
         const transformVal = (type: string, size: string, data: unknown, path: string) => {
 
-            // Caso seja uma lista de objetos
+            // If the type is a array
             if (size.length) {
 
                 let [, invertEndian, indexSize, rest] = StreamStructure.typeArrayBreaker.exec(size)!;
@@ -73,10 +72,10 @@ class StreamStructure {
 
                 if ((this.endian === "BE") === (!invertEndian)) {
                     buff.writeUIntBE(data.length, 0, +indexSize);
-                    buffers.push(buff);
+                    outBuffers.push(buff);
                 } else {
                     buff.writeUIntLE(data.length, 0, +indexSize);
-                    buffers.push(buff);
+                    outBuffers.push(buff);
                 }
 
                 for (let i = 0; i < data.length; i++) {
@@ -84,11 +83,10 @@ class StreamStructure {
                 }
 
             } else {
-
                 type nntn = (value: number | BigInt, offset?: number) => number;
                 let size: number = 0;
 
-                // Detecta os tipos e manda-os para buffers
+                // Detect the types and send to the buffers
                 switch (type) {
                     case "boolean": {
                         if (typeof data !== "boolean") {
@@ -96,7 +94,7 @@ class StreamStructure {
                         }
                         let buff = Buffer.allocUnsafe(1);
                         buff.writeInt8(+data);
-                        return buffers.push(buff);
+                        return outBuffers.push(buff);
                     }
                     case "char": {
                         if (typeof data !== "string") {
@@ -104,7 +102,7 @@ class StreamStructure {
                         }
                         let buff = Buffer.allocUnsafe(1);
                         buff.write(data);
-                        return buffers.push(buff);
+                        return outBuffers.push(buff);
                     }
                     case "byte": case "ubyte": case "short": case "ushort":
                     case "int": case "uint": case "long": case "ulong":
@@ -142,16 +140,15 @@ class StreamStructure {
                             }
                         }
 
-                        return buffers.push(buff);
+                        return outBuffers.push(buff);
                     }
                 }
 
-                //Caso tenha pré-processamento do valor
+                //make pre-process if can
                 if (type in this.preProcessing) data = this.preProcessing[type](data as Record<string, unknown>);
-
                 if (!(typeof data === "object" || typeof data === "function") || !data) throw new TypeError(`expected a 'object' but got '${typeof data}': ${path}`);
 
-                //Caso seja uma outra estrutura
+                //if is another structure
                 if (type in this.typesDefinitions) {
 
                     for (const ObjType of this.typesDefinitions[type]) {
@@ -163,7 +160,7 @@ class StreamStructure {
                     return;
                 }
 
-                //Caso seja uma tipo de condição 
+                //If is a condition 
                 if (type in this.typeConditions) {
 
                     // Data para ser testada
@@ -193,7 +190,7 @@ class StreamStructure {
                     return;
                 }
 
-                //Caso não seja definido como nenhum desses, é interpretado como erro
+                //If don't have registred
                 throw new Error(`Unknown type "${type}"`);
 
 
@@ -201,7 +198,6 @@ class StreamStructure {
 
         }
 
-        // chamar a função;
         for (const ObjType of this.structure) {
             const [, key, ArrType] = StreamStructure.typeObjectReader.exec(ObjType)!;
             const [, type, size] = StreamStructure.typeReader.exec(ArrType)!;
@@ -209,13 +205,11 @@ class StreamStructure {
             transformVal(type, size, data[key], `.${key}`);
         }
 
-        return Buffer.concat(buffers);
+        return Buffer.concat(outBuffers);
     }
 
     fromBuffer(buffer: Buffer) {
-        // Index atual do Buffer 
-        let index = 0;
-        // Valor final 
+        let bufferIndex = 0;
         let result: Record<string, unknown> = {};
 
         /**
@@ -232,23 +226,23 @@ class StreamStructure {
             try {
 
                 switch (type) {
-                    case "boolean": index += 1; return !!buffer.readInt8(index - 1);
-                    case "char": index += 1; return buffer.toString("ascii", index - 1, index);
+                    case "boolean": bufferIndex += 1; return !!buffer.readInt8(bufferIndex - 1);
+                    case "char": bufferIndex += 1; return buffer.toString("ascii", bufferIndex - 1, bufferIndex);
 
-                    case "byte": index += 1; return buffer.readInt8(index - 1);
-                    case "ubyte": index += 1; return buffer.readUInt8(index - 1);
+                    case "byte": bufferIndex += 1; return buffer.readInt8(bufferIndex - 1);
+                    case "ubyte": bufferIndex += 1; return buffer.readUInt8(bufferIndex - 1);
 
-                    case "short": index += 2; return (buffer[`readInt16${endian}` as keyof Buffer] as ntn)(index - 2);
-                    case "ushort": index += 2; return (buffer[`readUInt16${endian}` as keyof Buffer] as ntn)(index - 2);
+                    case "short": bufferIndex += 2; return (buffer[`readInt16${endian}` as keyof Buffer] as ntn)(bufferIndex - 2);
+                    case "ushort": bufferIndex += 2; return (buffer[`readUInt16${endian}` as keyof Buffer] as ntn)(bufferIndex - 2);
 
-                    case "int": index += 4; return (buffer[`readInt32${endian}` as keyof Buffer] as ntn)(index - 4);
-                    case "uint": index += 4; return (buffer[`readUInt32${endian}` as keyof Buffer] as ntn)(index - 4);
+                    case "int": bufferIndex += 4; return (buffer[`readInt32${endian}` as keyof Buffer] as ntn)(bufferIndex - 4);
+                    case "uint": bufferIndex += 4; return (buffer[`readUInt32${endian}` as keyof Buffer] as ntn)(bufferIndex - 4);
 
-                    case "long": index += 8; return (buffer[`readBigInt64${endian}` as keyof Buffer] as ntn)(index - 8);
-                    case "ulong": index += 8; return (buffer[`readBigUInt64${endian}` as keyof Buffer] as ntn)(index - 8);
+                    case "long": bufferIndex += 8; return (buffer[`readBigInt64${endian}` as keyof Buffer] as ntn)(bufferIndex - 8);
+                    case "ulong": bufferIndex += 8; return (buffer[`readBigUInt64${endian}` as keyof Buffer] as ntn)(bufferIndex - 8);
 
-                    case "float": index += 4; return (buffer[`readFloat${endian}` as keyof Buffer] as ntn)(index - 4);
-                    case "double": index += 8; return (buffer[`readDouble${endian}` as keyof Buffer] as ntn)(index - 8);
+                    case "float": bufferIndex += 4; return (buffer[`readFloat${endian}` as keyof Buffer] as ntn)(bufferIndex - 4);
+                    case "double": bufferIndex += 8; return (buffer[`readDouble${endian}` as keyof Buffer] as ntn)(bufferIndex - 8);
 
                 }
 
@@ -298,15 +292,15 @@ class StreamStructure {
                 try {
 
                     if ((this.endian === "BE") === (!invertEndian)) {
-                        arrayLength = buffer.readIntBE(index, +indexSize);
+                        arrayLength = buffer.readIntBE(bufferIndex, +indexSize);
                     } else {
-                        arrayLength = buffer.readIntLE(index, +indexSize);
+                        arrayLength = buffer.readIntLE(bufferIndex, +indexSize);
                     }
 
                 } catch (err) {
                     throw new Error(`The Buffer suddenly end while iterating: ${path}`)
                 }
-                index += +indexSize;
+                bufferIndex += +indexSize;
 
                 (data as Record<string, unknown>)[key] = [];
 

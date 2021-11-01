@@ -9,6 +9,10 @@
     "fasttest": "node src/tester.js",
     "test": "npm run build && npm run fasttest"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alstin112/stream-structure.git"
+  },
   "keywords": ["parser","SS"],
   "author": "Alstin112",
   "license": "MIT",

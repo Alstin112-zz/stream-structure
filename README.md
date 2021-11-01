@@ -23,9 +23,12 @@ $ npm i StreamStructure
 
 # Basics
 
+This npm is about parsing objects into Buffers, useful to exporting data and import again later.
+This creates a structure capable of reducing the space needed at least at possible. 
+
 ## Using
 
-To transform a simple Object with properties `name` and `color` like we just use on the constructor
+To transform a simple Object with properties `name` and `color` in a buffer, just use on the constructor the keys and the type of these keys.
 
 > ```js
 > const SS = require('streamstructure');
@@ -43,7 +46,7 @@ To transform a simple Object with properties `name` and `color` like we just use
 > console.log(outPerson); // expected output {name: "viktor", color: "yellow"}
 > ```
 
-we can use anothers types beyond `string`.
+We can use anothers types beyond `string`.
 
 ## Types Table
 
@@ -65,7 +68,7 @@ we can use anothers types beyond `string`.
 
 ## Arrays
 
-is possible to transform the types in to array of type, just using `[n]` as suffix where `n` is size of index, must be used any number in range `1-6`
+It's possible to transform the types into array of types, just using `[n]` as suffix where `n` is size of index, must be used any number in range `1-6`
 ```js
 const birthdaysModel = new SS("birthdays: short[2]");
 const birthdays = {
@@ -75,7 +78,7 @@ const birthdays = {
 console.log(birthdaysModel.toBuffer(birthdays)); // expected output <Buffer 00 03 0c 1f 08 a4 09 03>
 ```
 
-you can invert the index [endianess](https://en.wikipedia.org/wiki/Endianness) by using `!` before the number.
+You can invert the index [endianess](https://en.wikipedia.org/wiki/Endianness) by using `!` before the number.
 
 
 ```js
@@ -95,21 +98,22 @@ console.log(birthdaysModel.toBuffer(birthdays)); // expected output <Buffer 03 0
 > toBuffer(data: Record<string, unknown>): Buffer;
 > ```
 
-This method can pick json (`data`) and transform in to buffer using the presetted structure.
+This method can pick json (`data`) and transform into buffer using the presetted structure.
 
 ## fromBuffer()
 
 > ```ts
 > fromBuffer(buffer: string): Record<string, unknown>;
 > ```
-This method parses the output buffer from `toBuffer()` in to the json.
+
+This method parses the output buffer from `toBuffer()` into the json.
 
 ## setType()
 
 > ```ts
 > setType(type: string, ...structure: string[]): this;
 > ```
-for a more complex json, this function is very usefull, this can make objects inside of anothers object.
+for a more complex json, this function is very useful, this can make objects inside of anothers object.
 
 ```js
 const houseModel = new SS("rooms: byte", "rented: boolean", "father: person","mother: person","son: person")
@@ -145,9 +149,9 @@ console.log(houseModel.toBuffer(house)) // expected <Buffer 08 00 00 04 52 6f 73
 > ): this;
 > ```
 
-this method processes the all values of the type `type`.
+This method processes the all values of the type `type`.
 
-the `preProcessing` is used in the `toBuffer()`.  
+THe `preProcessing` is used in the `toBuffer()`.  
 and the `postProcessing` is used in the `fromBuffer()`.
 
 ```js
@@ -191,7 +195,7 @@ This method changes the default endianess from arrays and numbers.
 >setTypeCondicional(type: string, condition: string, structure: string[]): this;
 >```
 
-This Method has a complex behavior, considering `data` of the type  `type`, if the `data.type` is equal to the `condition`, the `data.data` structure will be equal to `strucuture`, if sended data don't have any `condition`, will return a error.
+This Method has a complex behavior, considering `data` of the type  `type`, if the `data.type` is equal to the `condition`, the `data.data` structure will be equal to `strucuture`, if the sent data don't have any `condition`, will return a error.
 
 ```js
 const ShapesModel = new SS("shapes: shapes[1]")
