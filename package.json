@@ -1,0 +1,21 @@
+{
+  "name": "streamstructure",
+  "version": "1.0.0",
+  "description": "Compact json parser",
+  "main": "lib/index.js",
+  "types": "lib",
+  "scripts": {
+    "build": "tsc -p .",
+    "fasttest": "node src/tester.js",
+    "test": "npm run build && npm run fasttest"
+  },
+  "keywords": ["parser","SS"],
+  "author": "Alstin112",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^4.3.5"
+  },
+  "dependencies": {
+    "@types/node": "^16.4.12"
+  }
+}
