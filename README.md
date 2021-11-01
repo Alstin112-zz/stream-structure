@@ -18,7 +18,7 @@
 # Installation
 
 ```bash
-$ npm i StreamStructure
+$ npm i streamstructure
 ```
 
 # Basics
