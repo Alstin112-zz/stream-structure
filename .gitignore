@@ -1,1 +1,5 @@
 node_modules
+__tests__
+src/tester.js
+jest.config.ts
+coverage

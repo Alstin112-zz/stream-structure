@@ -136,7 +136,7 @@ const house = {
     }
 }
 
-console.log(houseModel.toBuffer(house)) // expected <Buffer 08 00 00 04 52 6f 73 65 1c 00 06 4c 75 63 63 61 73 1e 00 03 4c 65 6f 08>
+console.log(houseModel.toBuffer(house)) // expected <Buffer 08 00 00 06 4c 75 63 63 61 73 1e 00 04 52 6f 73 65 1c 00 03 4c 65 6f 08>
 ```
 
 ## setTypeProcess()

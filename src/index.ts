@@ -1,28 +1,32 @@
+type dictionarystr = `${string}: ${string}`;
+
 class StreamStructure {
 
-    public structure: string[];
+    public structure: dictionarystr[];
 
     private endian: "BE" | "LE" = "BE";
+    private forcedReturn: boolean = false;
 
-    private typesDefinitions: Record<string, string[]> = {
-        "string": ["_: char[2]"],
-    }
+    private typesDefinitions: Record<string, dictionarystr[]> = {}
+    private typeConditions: Record<string, { indexType: string, data: Record<string, dictionarystr[]> }> = {}
+    private preProcessing: Record<string, (value: unknown) => Record<string, unknown>> = {}
+    private posProcessing: Record<string, (value: Record<string, unknown>) => unknown> = {}
 
-    private typeConditions: Record<string, { indexType: string, data: Record<string, string[]> }> = {
-    }
-
-    private preProcessing: Record<string, (value: unknown) => Record<string, unknown>> = {
-        "string": (value: unknown): Record<string, string[]> => {
-            if (typeof value !== "string") throw new TypeError(`expected a 'string' but got '${typeof value}'`);
-            return { _: value.split("") };
-        },
-    }
-
-    private posProcessing: Record<string, (value: Record<string, unknown>) => unknown> = {
-        "string": (value: Record<string, unknown>): string => {
-            return (value._ as string[]).join("");
-        },
-    }
+    public static readonly primitivesLength = Object.freeze({
+        "boolean": 1,
+        "char": 1,
+        "string": 2,
+        "byte": 1,
+        "ubyte": 1,
+        "short": 2,
+        "ushort": 2,
+        "int": 4,
+        "uint": 4,
+        "long": 8,
+        "ulong": 8,
+        "float": 4,
+        "double": 8,
+    } as const);
 
     private static readonly typeObjectReader = /^(\w*)\s*:\s*(\w*\s*(?:\[!?[1-6]\]\s*)*)$/i;
     private static readonly typeReader = /^(\w*)\s*((?:\[!?[1-6]\]\s*)*)$/i;
@@ -34,7 +38,7 @@ class StreamStructure {
      * @example //Creating a structure for a simple object `{name: string,age: number}`
      * cosnt SS = new StreamStructure("name: string", "age: byte");
      */
-    constructor(...types: string[]) {
+    constructor(...types: dictionarystr[]) {
 
         this.structure = types;
 
@@ -86,71 +90,13 @@ class StreamStructure {
                 type nntn = (value: number | BigInt, offset?: number) => number;
                 let size: number = 0;
 
-                // Detect the types and send to the buffers
-                switch (type) {
-                    case "boolean": {
-                        if (typeof data !== "boolean") {
-                            throw new Error(`TypeError: expected 'boolean', got '${typeof data}': ${path}`);
-                        }
-                        let buff = Buffer.allocUnsafe(1);
-                        buff.writeInt8(+data);
-                        return outBuffers.push(buff);
-                    }
-                    case "char": {
-                        if (typeof data !== "string") {
-                            throw new Error(`TypeError: expected 'string', got '${typeof data}': ${path}`);
-                        }
-                        let buff = Buffer.allocUnsafe(1);
-                        buff.write(data);
-                        return outBuffers.push(buff);
-                    }
-                    case "byte": case "ubyte": case "short": case "ushort":
-                    case "int": case "uint": case "long": case "ulong":
-                    case "float": case "double": {
-                        if (typeof data !== "number" && typeof data !== "bigint") {
-                            throw new Error(`TypeError: expected 'number' or 'bigint', got '${typeof data}': ${path}`);
-                        }
-
-                        const numbTypes = [["byte"], ["short"], ["int", "float"], ["long", "double"]]
-                        const usig = type.startsWith("u") ? "U" : "";
-                        const buffSize = numbTypes.findIndex(n => n.includes(type.replace('u','')));
-                        const buff = Buffer.allocUnsafe(1 << buffSize);
-                        const maxValue = new Array(buffSize).fill(0).reduce(a => a * a, BigInt(256));
-                        const maxSize = maxValue / BigInt(+!usig + 1);
-                        const minSize = !usig ? -maxSize : 0 ;
-
-                        const numb = Number(data);
-                        if (['byte', 'ubyte', 'short', 'ushort', 'int', 'uint'].includes(type) && numb < minSize || numb >= maxSize) {
-                            throw new Error(`The number '${numb}' must be in range ${minSize} ~ ${maxSize}: ${path}`);
-                        }
-
-                        switch (type) {
-                            case "float": buff[`writeFloat${this.endian}`](numb); break;
-                            case "double": buff[`writeDouble${this.endian}`](numb); break;
-                            case "byte": case "ubyte": buff[`write${usig}Int8`](numb); break;
-                            case "short": case "ushort": buff[`write${usig}Int16${this.endian}`](numb); break;
-                            case "int": case "uint": buff[`write${usig}Int32${this.endian}`](numb); break;
-                            case "long": case "ulong": {
-                                const numb = BigInt(~~data);
-                                if (numb < minSize || numb >= maxSize)
-                                    throw new Error(`The number must be in range ${minSize} ~ ${maxSize}: ${path}`);
-
-                                buff[`writeBig${usig}Int64${this.endian}`](numb);
-                                break;
-                            }
-                        }
-
-                        return outBuffers.push(buff);
-                    }
-                }
-
                 //make pre-process if can
-                if (type in this.preProcessing) data = this.preProcessing[type](data as Record<string, unknown>);
-                if (!(typeof data === "object" || typeof data === "function") || !data) throw new TypeError(`expected a 'object' but got '${typeof data}': ${path}`);
-
+                if (type in this.preProcessing) data = this.preProcessing[type](data);
+                
                 //if is another structure
                 if (type in this.typesDefinitions) {
-
+                    if (!(typeof data === "object" || typeof data === "function") || !data) throw new TypeError(`expected a 'object' but got '${typeof data}': ${path}`);
+                    
                     for (const ObjType of this.typesDefinitions[type]) {
                         const [, key, ArrType] = StreamStructure.typeObjectReader.exec(ObjType)!;
                         const [, type, size] = StreamStructure.typeReader.exec(ArrType)!;
@@ -159,9 +105,10 @@ class StreamStructure {
                     }
                     return;
                 }
-
+                
                 //If is a condition 
                 if (type in this.typeConditions) {
+                    if (!(typeof data === "object" || typeof data === "function") || !data) throw new TypeError(`expected a 'object' but got '${typeof data}': ${path}`);
 
                     // Data para ser testada
                     const tData = data as { type?: unknown, data?: unknown };
@@ -190,6 +137,74 @@ class StreamStructure {
                     return;
                 }
 
+                // Detect the types and send to the buffers
+                switch (type) {
+                    case "boolean": {
+                        if (typeof data !== "boolean") {
+                            throw new Error(`TypeError: expected 'boolean', got '${typeof data}': ${path}`);
+                        }
+                        let buff = Buffer.allocUnsafe(1);
+                        buff.writeInt8(+data);
+                        return outBuffers.push(buff);
+                    }
+                    case "char": {
+                        if (typeof data !== "string") {
+                            throw new Error(`TypeError: expected 'string', got '${typeof data}': ${path}`);
+                        }
+                        let buff = Buffer.allocUnsafe(1);
+                        buff.write(data);
+                        return outBuffers.push(buff);
+                    }
+                    case "string": {
+                        if (typeof data !== "string") {
+                            throw new Error(`TypeError: expected 'string', got '${typeof data}': ${path}`);
+                        }
+                        let buff = Buffer.allocUnsafe(data.length + 2);
+                        buff[`writeInt16${this.endian}`](data.length);
+                        buff.write(data, 2);
+                        return outBuffers.push(buff);
+                    }
+                    case "byte": case "ubyte": case "short": case "ushort":
+                    case "int": case "uint": case "long": case "ulong":
+                    case "float": case "double": {
+                        if (typeof data !== "number" && typeof data !== "bigint") {
+                            throw new Error(`TypeError: expected 'number' or 'bigint', got '${typeof data}': ${path}`);
+                        }
+
+                        const numbTypes = [["byte"], ["short"], ["int", "float"], ["long", "double"]]
+                        const usig = type.startsWith("u") ? "U" : "";
+                        const buffSize = numbTypes.findIndex(n => n.includes(type.replace('u', '')));
+                        const buff = Buffer.allocUnsafe(1 << buffSize);
+                        const maxValue = new Array(buffSize).fill(0).reduce(a => a * a, BigInt(256));
+                        const maxSize = maxValue / BigInt(+!usig + 1);
+                        const minSize = !usig ? -maxSize : 0;
+
+                        const numb = Number(data);
+                        if (['byte', 'ubyte', 'short', 'ushort', 'int', 'uint'].includes(type) && numb < minSize || numb >= maxSize) {
+                            throw new Error(`The number '${numb}' must be in range ${minSize} ~ ${maxSize}: ${path}`);
+                        }
+
+                        switch (type) {
+                            case "float": buff[`writeFloat${this.endian}`](numb); break;
+                            case "double": buff[`writeDouble${this.endian}`](numb); break;
+                            case "byte": case "ubyte": buff[`write${usig}Int8`](numb); break;
+                            case "short": case "ushort": buff[`write${usig}Int16${this.endian}`](numb); break;
+                            case "int": case "uint": buff[`write${usig}Int32${this.endian}`](numb); break;
+                            case "long": case "ulong": {
+                                const numb = BigInt(~~data);
+                                if (numb < minSize || numb >= maxSize)
+                                    throw new Error(`The number must be in range ${minSize} ~ ${maxSize}: ${path}`);
+
+                                buff[`writeBig${usig}Int64${this.endian}`](numb);
+                                break;
+                            }
+                        }
+
+                        return outBuffers.push(buff);
+                    }
+                }
+
+
                 //If don't have registred
                 throw new Error(`Unknown type "${type}"`);
 
@@ -208,7 +223,10 @@ class StreamStructure {
         return Buffer.concat(outBuffers);
     }
 
-    fromBuffer(buffer: Buffer) {
+    fromBuffer(buffer: Buffer): Record<string, unknown> {
+
+        if (!Buffer.isBuffer(buffer)) throw new Error(`The input must be a buffer`);
+
         let bufferIndex = 0;
         let result: Record<string, unknown> = {};
 
@@ -219,60 +237,69 @@ class StreamStructure {
          * @param path caminho para o arquivo atual (debug)
          * @returns valor
          */
-        const getValue = (type: string, endian: string, path: string): unknown => {
+        const getValue = (type: string, endian: "BE" | "LE", path: string): unknown => {
 
             type ntn = (offset?: number) => number;
 
-            try {
+            let data = {}
+            if (type in this.typesDefinitions) { //
 
-                switch (type) {
-                    case "boolean": bufferIndex += 1; return !!buffer.readInt8(bufferIndex - 1);
-                    case "char": bufferIndex += 1; return buffer.toString("ascii", bufferIndex - 1, bufferIndex);
+                for (const ObjType of this.typesDefinitions[type]) {
+                    const [, key, ArrType] = StreamStructure.typeObjectReader.exec(ObjType)!;
+                    const [, type, size] = StreamStructure.typeReader.exec(ArrType)!;
 
-                    case "byte": bufferIndex += 1; return buffer.readInt8(bufferIndex - 1);
-                    case "ubyte": bufferIndex += 1; return buffer.readUInt8(bufferIndex - 1);
-
-                    case "short": bufferIndex += 2; return (buffer[`readInt16${endian}` as keyof Buffer] as ntn)(bufferIndex - 2);
-                    case "ushort": bufferIndex += 2; return (buffer[`readUInt16${endian}` as keyof Buffer] as ntn)(bufferIndex - 2);
-
-                    case "int": bufferIndex += 4; return (buffer[`readInt32${endian}` as keyof Buffer] as ntn)(bufferIndex - 4);
-                    case "uint": bufferIndex += 4; return (buffer[`readUInt32${endian}` as keyof Buffer] as ntn)(bufferIndex - 4);
-
-                    case "long": bufferIndex += 8; return (buffer[`readBigInt64${endian}` as keyof Buffer] as ntn)(bufferIndex - 8);
-                    case "ulong": bufferIndex += 8; return (buffer[`readBigUInt64${endian}` as keyof Buffer] as ntn)(bufferIndex - 8);
-
-                    case "float": bufferIndex += 4; return (buffer[`readFloat${endian}` as keyof Buffer] as ntn)(bufferIndex - 4);
-                    case "double": bufferIndex += 8; return (buffer[`readDouble${endian}` as keyof Buffer] as ntn)(bufferIndex - 8);
+                    transformVal(key, type, size, data, `${path}.${key}`);
 
                 }
 
-            } catch (err) {
-                throw new Error(`The Buffer suddenly end when reading the type ${type}: ${path}`)
-            }
-
-            let data = {}
-            if (type in this.typesDefinitions) {
-                this.typesDefinitions[type].forEach(ObjType => {
-                    const [, key, ArrType] = StreamStructure.typeObjectReader.exec(ObjType)!;
-                    const [, type, size] = StreamStructure.typeReader.exec(ArrType)!;
-
-                    transformVal(key, type, size, data, `${path}.${key}`);
-                })
             } else if (type in this.typeConditions) {
                 const index = getValue(this.typeConditions[type].indexType, this.endian, `${path}.key(${type})`);
 
-                if (typeof index !== "string" && typeof index !== "number") throw `expected a 'string' or 'number' but got '${typeof index}'`;
+                if (typeof index !== "string" && typeof index !== "number") throw new Error(`expected a 'string' or 'number' but got '${typeof index}'`);
+                if (!(index in this.typeConditions[type].data)) throw new Error(`Don't exist any index '${index}' at type '${type}': ${path}`)
 
-                this.typeConditions[type].data[index].forEach(ObjType => {
+                for (const ObjType of this.typeConditions[type].data[index]) {
                     const [, key, ArrType] = StreamStructure.typeObjectReader.exec(ObjType)!;
                     const [, type, size] = StreamStructure.typeReader.exec(ArrType)!;
 
                     transformVal(key, type, size, data, `${path}.${key}`);
-                });
-                data = { type: index, data: data };
+                }
 
+                data = { type: index, data: data };
             } else {
-                throw new TypeError(`Unknown type "${type}"`);
+                if (bufferIndex > buffer.length) throw new Error(`The Buffer suddenly end when reading the type '${type}': ${path}`);
+                try {
+                    switch (type) {
+                        case "boolean": bufferIndex += 1; return !!buffer.readInt8(bufferIndex - 1);
+                        case "char": bufferIndex += 1; return buffer.toString("ascii", bufferIndex - 1, bufferIndex);
+                        case "string": {
+                            bufferIndex += 2;
+                            const size = buffer[`readInt16${endian}`](bufferIndex - 2);
+                            bufferIndex += size;
+                            return buffer.toString("ascii", bufferIndex - size, bufferIndex)
+                        }
+
+                        case "byte": bufferIndex += 1; return buffer.readInt8(bufferIndex - 1);
+                        case "ubyte": bufferIndex += 1; return buffer.readUInt8(bufferIndex - 1);
+
+                        case "short": bufferIndex += 2; return buffer[`readInt16${endian}`](bufferIndex - 2);
+                        case "ushort": bufferIndex += 2; return buffer[`readUInt16${endian}`](bufferIndex - 2);
+
+                        case "int": bufferIndex += 4; return (buffer[`readInt32${endian}`] as ntn)(bufferIndex - 4);
+                        case "uint": bufferIndex += 4; return (buffer[`readUInt32${endian}`] as ntn)(bufferIndex - 4);
+
+                        case "long": bufferIndex += 8; return (buffer[`readBigInt64${endian}` as keyof Buffer] as ntn)(bufferIndex - 8);
+                        case "ulong": bufferIndex += 8; return (buffer[`readBigUInt64${endian}` as keyof Buffer] as ntn)(bufferIndex - 8);
+
+                        case "float": bufferIndex += 4; return (buffer[`readFloat${endian}` as keyof Buffer] as ntn)(bufferIndex - 4);
+                        case "double": bufferIndex += 8; return (buffer[`readDouble${endian}` as keyof Buffer] as ntn)(bufferIndex - 8);
+
+                    }
+
+                } catch (err) {
+                    throw new Error(`The Buffer suddenly end when reading the type ${type}: ${path}`);
+                }
+
             }
 
             if (type in this.posProcessing) {
@@ -305,7 +332,7 @@ class StreamStructure {
                 (data as Record<string, unknown>)[key] = [];
 
                 for (let i = 0; i < arrayLength; i++) {
-                    ((data as Record<string, unknown>)[key] as unknown[])[i] = getValue(type, this.endian, `${path}[${i}]`);;
+                    (data as Record<string, unknown[]>)[key][i] = getValue(type, this.endian, `${path}[${i}]`);;
                 }
 
             } else {
@@ -315,12 +342,12 @@ class StreamStructure {
             }
         }
 
-        this.structure.forEach((ObjType) => {
+        for (const ObjType of this.structure) {
             const [, key, ArrType] = StreamStructure.typeObjectReader.exec(ObjType)!;
             const [, type, size] = StreamStructure.typeReader.exec(ArrType)!;
 
             transformVal(key, type, size, result, `.${key}`);
-        })
+        }
 
         return result;
     }
@@ -331,7 +358,7 @@ class StreamStructure {
      * @param type the type that will be created
      * @param structure a sequence of `key: type`
      */
-    setType(type: string, ...structure: string[]) {
+    setType(type: string, ...structure: dictionarystr[]) {
         this.typesDefinitions[type] = structure;
         return this;
     }
@@ -357,7 +384,11 @@ class StreamStructure {
         return this;
     }
 
-    setTypeCondicional(type: string, condition: string, structure: string[]) {
+    setTypeCondicional(type: string, condition: string, structure: dictionarystr[]) {
+
+        const err = structure.find(str => !StreamStructure.typeObjectReader.test(str));
+        if (err) throw new Error(`The structure's string "${err}" don't match with pattern "key: type"`);
+
         if (!(type in this.typeConditions)) this.setTypeCondicionalIndex(type, "string");
 
         this.typeConditions[type].data[condition] = structure;
@@ -371,8 +402,18 @@ class StreamStructure {
      * @returns 
      */
     setDefaultEndian(endian: "BE" | "LE") {
+        if (endian !== "BE" && endian !== "LE") throw new Error("The endian must be 'BE' or 'LE'");
+
         this.endian = endian;
         return this;
+    }
+
+    /**
+     * Instead of return the error when something goes wrong, will return the Object with error inside (recomended only for debug)
+     * @param bool (true by defautk)
+     */
+    setForcedReturn(bool: boolean = true) {
+        this.forcedReturn = !!bool;
     }
 }
 
