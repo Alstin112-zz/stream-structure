@@ -12,8 +12,8 @@
   - [setType()](#settype)
   - [setTypeProcess()](#settypeprocess)
   - [setDefaultEndian()](#setdefaultendian)
-  - [setTypeCondicional()](#settypecondicional)
-  - [setTypeCondicionalIndex()](#settypecondicionalindex)
+  - [setTypeConditional()](#settypeconditional)
+  - [setTypeConditionalIndex()](#settypeconditionalindex)
 
 # Installation
 
@@ -189,19 +189,19 @@ This method changes the default endianess from arrays and numbers.
 
 *using the inversion (`!`) on the [arrays](#arrays), invert the actual endian*
 
-## setTypeCondicional()
+## setTypeConditional()
 
 >```ts
->setTypeCondicional(type: string, condition: string, structure: string[]): this;
+>setTypeConditional(type: string, condition: string, structure: string[]): this;
 >```
 
 This Method has a complex behavior, considering `data` of the type  `type`, if the `data.type` is equal to the `condition`, the `data.data` structure will be equal to `strucuture`, if the sent data don't have any `condition`, will return a error.
 
 ```js
 const ShapesModel = new SS("shapes: shapes[1]")
-    .setTypeCondicional("shapes", "circle", ["x: int", "y: int", "radius: int"])
-    .setTypeCondicional("shapes", "square", ["x: int", "y: int", "width: int", "height: int"])
-    .setTypeCondicional("shapes", "poligon", ["x: int", "y: int", "radius: int", "sides: byte"]);
+    .setTypeConditional("shapes", "circle", ["x: int", "y: int", "radius: int"])
+    .setTypeConditional("shapes", "square", ["x: int", "y: int", "width: int", "height: int"])
+    .setTypeConditional("shapes", "poligon", ["x: int", "y: int", "radius: int", "sides: byte"]);
 
 const Shapes1 = {
     shapes: [
@@ -216,20 +216,20 @@ const buff = ShapesModel.toBuffer(Shapes1); // output buffer
 const Shapes2 = ShapesModel.fromBuffer(buff); // identical to object "Shapes1"
 ```
 
-## setTypeCondicionalIndex()
+## setTypeConditionalIndex()
 
 >```ts
->setTypeCondicionalIndex(type: string, indexType: string): this;
+>setTypeConditionalIndex(type: string, indexType: string): this;
 >```
 
 This method sets the way of saving the index on the buffer, the recommended indexType is `string`, `byte` or any other type of number, this can handle anothers type, but only with [preProcessing](#settypeprocess), because the input of the array can only accepts `number` or `string`.
 
 ```js
 const ShapesModel = new SS("shapes: shapes[1]")
-    .setTypeCondicionalIndex("shapes", "byte")
-    .setTypeCondicional("shapes", 0, ["x: byte", "y: byte", "radius: byte"])
-    .setTypeCondicional("shapes", 1, ["x: byte", "y: byte", "width: byte", "height: byte"])
-    .setTypeCondicional("shapes", 2, ["x: byte", "y: byte", "radius: byte", "sides: byte"]);
+    .setTypeConditionalIndex("shapes", "byte")
+    .setTypeConditional("shapes", "0", ["x: byte", "y: byte", "radius: byte"])
+    .setTypeConditional("shapes", "1", ["x: byte", "y: byte", "width: byte", "height: byte"])
+    .setTypeConditional("shapes", "2", ["x: byte", "y: byte", "radius: byte", "sides: byte"]);
 
 const Shapes1 = {
     shapes: [

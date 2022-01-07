@@ -9,8 +9,8 @@ class StreamStructure {
 
     private typesDefinitions: Record<string, dictionarystr[]> = {}
     private typeConditions: Record<string, { indexType: string, data: Record<string, dictionarystr[]> }> = {}
-    private preProcessing: Record<string, (value: unknown) => Record<string, unknown>> = {}
-    private posProcessing: Record<string, (value: Record<string, unknown>) => unknown> = {}
+    private preProcessing: Record<string, (value: unknown) => unknown> = {}
+    private posProcessing: Record<string, (value: unknown) => unknown> = {}
 
     public static readonly primitivesLength = Object.freeze({
         "boolean": 1,
@@ -92,11 +92,11 @@ class StreamStructure {
 
                 //make pre-process if can
                 if (type in this.preProcessing) data = this.preProcessing[type](data);
-                
+
                 //if is another structure
                 if (type in this.typesDefinitions) {
                     if (!(typeof data === "object" || typeof data === "function") || !data) throw new TypeError(`expected a 'object' but got '${typeof data}': ${path}`);
-                    
+
                     for (const ObjType of this.typesDefinitions[type]) {
                         const [, key, ArrType] = StreamStructure.typeObjectReader.exec(ObjType)!;
                         const [, type, size] = StreamStructure.typeReader.exec(ArrType)!;
@@ -105,7 +105,7 @@ class StreamStructure {
                     }
                     return;
                 }
-                
+
                 //If is a condition 
                 if (type in this.typeConditions) {
                     if (!(typeof data === "object" || typeof data === "function") || !data) throw new TypeError(`expected a 'object' but got '${typeof data}': ${path}`);
@@ -369,12 +369,24 @@ class StreamStructure {
      * @param preProcessing the pre-processor used to change this type when storaged in buffer
      * @param postProcessing the pre-processor used to change this type when storaged in buffer
      */
-    setTypeProcess(type: string, preProcessing: (value: unknown) => Record<string, unknown>, postProcessing: (value: Record<string, unknown>) => unknown) {
-        this.preProcessing[type] = preProcessing;
-        this.posProcessing[type] = postProcessing;
+    setTypeProcess<A, B>(type: string, preProcessing: (value: A) => B, postProcessing: (value: B) => A) {
+        this.preProcessing[type] = preProcessing as (value: unknown) => unknown;
+        this.posProcessing[type] = postProcessing as (value: unknown) => unknown;
         return this;
     }
 
+    setTypeConditionalIndex(type: string, indexType: string) {
+        if (type in this.typeConditions)
+            this.typeConditions[type].indexType = indexType;
+        else
+            this.typeConditions[type] = { indexType: indexType, data: {} };
+
+        return this;
+    }
+
+    /**
+     * @deprecated mismatch :P, instead use the `SS.setTypeConditionalIndex()`
+     */
     setTypeCondicionalIndex(type: string, indexType: string) {
         if (type in this.typeConditions)
             this.typeConditions[type].indexType = indexType;
@@ -384,17 +396,34 @@ class StreamStructure {
         return this;
     }
 
-    setTypeCondicional(type: string, condition: string, structure: dictionarystr[]) {
+    
+    setTypeConditional(type: string, condition: string, structure: dictionarystr[]) {
 
         const err = structure.find(str => !StreamStructure.typeObjectReader.test(str));
         if (err) throw new Error(`The structure's string "${err}" don't match with pattern "key: type"`);
 
-        if (!(type in this.typeConditions)) this.setTypeCondicionalIndex(type, "string");
+        if (!(type in this.typeConditions)) this.setTypeConditionalIndex(type, "string");
 
         this.typeConditions[type].data[condition] = structure;
 
         return this;
     }
+
+    /**
+     * @deprecated mismatch :P, instead use the `SS.setTypeConditional()`
+     */
+    setTypeCondicional(type: string, condition: string, structure: dictionarystr[]) {
+
+        const err = structure.find(str => !StreamStructure.typeObjectReader.test(str));
+        if (err) throw new Error(`The structure's string "${err}" don't match with pattern "key: type"`);
+
+        if (!(type in this.typeConditions)) this.setTypeConditionalIndex(type, "string");
+
+        this.typeConditions[type].data[condition] = structure;
+
+        return this;
+    }
+
 
     /**
      * Set the default endian for the numbers, arrays, etc.
