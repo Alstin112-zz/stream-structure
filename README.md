@@ -199,9 +199,9 @@ This Method has a complex behavior, considering `data` of the type  `type`, if t
 
 ```js
 const ShapesModel = new SS("shapes: shapes[1]")
-    .setTypeConditional("shapes", "circle", ["x: int", "y: int", "radius: int"])
-    .setTypeConditional("shapes", "square", ["x: int", "y: int", "width: int", "height: int"])
-    .setTypeConditional("shapes", "poligon", ["x: int", "y: int", "radius: int", "sides: byte"]);
+    .setTypeConditional("shapes", "circle",  "x: int", "y: int", "radius: int")
+    .setTypeConditional("shapes", "square",  "x: int", "y: int", "width: int", "height: int")
+    .setTypeConditional("shapes", "poligon", "x: int", "y: int", "radius: int", "sides: byte");
 
 const Shapes1 = {
     shapes: [
@@ -227,9 +227,9 @@ This method sets the way of saving the index on the buffer, the recommended inde
 ```js
 const ShapesModel = new SS("shapes: shapes[1]")
     .setTypeConditionalIndex("shapes", "byte")
-    .setTypeConditional("shapes", "0", ["x: byte", "y: byte", "radius: byte"])
-    .setTypeConditional("shapes", "1", ["x: byte", "y: byte", "width: byte", "height: byte"])
-    .setTypeConditional("shapes", "2", ["x: byte", "y: byte", "radius: byte", "sides: byte"]);
+    .setTypeConditional("shapes", "0", "x: byte", "y: byte", "radius: byte")
+    .setTypeConditional("shapes", "1", "x: byte", "y: byte", "width: byte", "height: byte")
+    .setTypeConditional("shapes", "2", "x: byte", "y: byte", "radius: byte", "sides: byte");
 
 const Shapes1 = {
     shapes: [
